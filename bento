@@ -280,7 +280,8 @@ EOF
 
         # script used to download changes and rebuild
         # also used to run it manually the first time to configure the system
-        cat > "${dest_directory}/bootstrap.sh" <<EOF
+        if ! test -f "${dest_directory}/bootstrap.sh"
+            cat > "${dest_directory}/bootstrap.sh" <<EOF
 #!/bin/sh
 
 # accept the remote ssh fingerprint if not already known
@@ -401,6 +402,7 @@ else
 fi
 rm "\${LOGFILE}.gz"
 EOF
+        fi
 
         # to make flakes using caching, we must avoid repositories to change everytime
         # we must ignore files that change everytime
