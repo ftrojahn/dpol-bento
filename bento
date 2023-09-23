@@ -281,6 +281,7 @@ EOF
         # script used to download changes and rebuild
         # also used to run it manually the first time to configure the system
         if ! test -f "${dest_directory}/bootstrap.sh"
+        then
             cat > "${dest_directory}/bootstrap.sh" <<EOF
 #!/bin/sh
 
