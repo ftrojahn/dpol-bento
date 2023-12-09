@@ -85,8 +85,7 @@ version_diff() {
 }
 
 display_status() {
-    cd "${CHROOT_DIR}" || exit 5
-    PRETTY_OUT_COLUMN=$(ls -1 | awk '{ if(length($1) > max) { max = length($1) }} END { print max }')
+    PRETTY_OUT_COLUMN=$(ssh ${REMOTE_IP} "ls -1 \"${CHROOT_DIR}\" | awk '{ if(length($1) > max) { max = length($1) }} END { print max }'")
 
     # printf isn't aware of emojis, need -2 chars per emoji
     printf "%${PRETTY_OUT_COLUMN}s %15s %16s %18s %40s\n" \
@@ -95,16 +94,17 @@ display_status() {
     printf "%${PRETTY_OUT_COLUMN}s %15s %16s %18s %40s\n" \
     	"-------" "---------" "-----------" "-------------" "-------------"
 
-    for i in *
+    HOSTS=$(ssh ${REMOTE_IP} "find ${CHROOT_DIR} -mindepth 1 -maxdepth 1 -type d")
+
+    for i in $HOSTS
     do
-        test -d "${i}" || continue
-        RESULT=$(find "${i}/logs/" -type f -cnewer "${i}/last_change_date" | sort -n)
+        RESULT=$(ssh ${REMOTE_IP} "find \"${i}/logs/\" -type f -cnewer \"${i}/last_change_date\" | sort -n")
 
         # date calculation
-        LASTLOG=$(find "${i}/logs/" -type f | sort -n | tail -n 1)
-        LASTCONFIG=$(date -r "${i}/last_change_date" "+%s")
+        LASTLOG=$(ssh ${REMOTE_IP} "find \"${i}/logs/\" -type f | sort -n | tail -n 1")
+        LASTCONFIG=$(ssh ${REMOTE_IP} "date -r \"${i}/last_change_date\" \"+%s\"")
         ELAPSED_SINCE_LATE="new config $(elapsed_time $(( $(date +%s) - "$LASTCONFIG")))"
-        EXPECTED_CONFIG="$(awk -F '=' -v host="${i}" 'host == $1 { print $2 }' states.txt | cut -b 1-8)"
+        EXPECTED_CONFIG=$(ssh ${REMOTE_IP} "awk -F '=' -v host=\"${i}\" 'host == \"${1}\" { print \"${2}\" }' ${CHROOT_DIR}/states.txt | cut -b 1-8")
 
         if [ -z "${EXPECTED_CONFIG}" ]; then EXPECTED_CONFIG="non-flakes" ; fi
 
@@ -117,11 +117,10 @@ display_status() {
 
         LASTLOGVERSION="$(echo "$LASTLOG" | awk -F '_' '{ print $2 }' | awk -F '-' '{ print $1 }' )"
         #NIXPKGS_DATE="$(echo "$LASTLOG" | awk -F '_' '{ print $2 }' | awk -F '-' '{ printf("%s", $NF) }' )"
-        LASTTIME=$(date -r "$LASTLOG" "+%s")
+        LASTTIME=$(ssh ${REMOTE_IP} "date -r \"$LASTLOG\" \"+%s\"")
         ELAPSED_SINCE_UPDATE="build $(elapsed_time $(( $(date +%s) - "$LASTTIME" )))"
 
-
-        if grep "^${i}=${LASTLOGVERSION}" states.txt >/dev/null
+        if $(ssh ${REMOTE_IP} "grep \"^${i}=${LASTLOGVERSION}\" ${CHROOT_DIR}/states.txt >/dev/null")
         then
             MATCH="💚"
             MATCH_IF=1
@@ -191,7 +190,7 @@ display_status() {
 }
 user_exists() {
     user="$1"
-    if ! id "${user}" >/dev/null 2>/dev/null
+    if ! ssh ${REMOTE_IP} "id \"${user}\"" >/dev/null 2>/dev/null
     then
         echo "you need a system user in your fleet for ${user}"
         exit 3
@@ -515,37 +514,38 @@ deploy_files() {
         STAGING_DIR="$(mktemp -d /tmp/bento-staging-dispatch.XXXXXXXXXXXXXX)"
 
         # sftp chroot requires the home directory to be owned by root
-        install -d -o root   -g sftp_users -m 755 "${STAGING_DIR}"
-        install -d -o root   -g sftp_users -m 755 "${STAGING_DIR}/${dest}"
-        install -d -o root   -g sftp_users -m 755 "${STAGING_DIR}/${dest}/config"
-        install -d -o "${user}" -g sftp_users -m 755 "${STAGING_DIR}/${dest}/logs"
+        install -d "${STAGING_DIR}"
+        install -d "${STAGING_DIR}/${dest}"
+        install -d "${STAGING_DIR}/${dest}/new-config"
+        install -d "${STAGING_DIR}/${dest}/logs"
 
         # copy files in the chroot
-        rsync --delete -rltgoDL "$sources/" "${STAGING_DIR}/${dest}/config/"
+        rsync --delete -rltgoDL "$sources/" "${STAGING_DIR}/${dest}/new-config/"
+        rsync --delete -rltgoDL "${REMOTE_IP}:${CHROOT_DIR}/${dest}/config/" "${STAGING_DIR}/${dest}/old-config/"
 
-        create_bento_files "${STAGING_DIR}/${dest}/config" "${dest}"
+        create_bento_files "${STAGING_DIR}/${dest}/new-config" "${dest}"
 
         # only distribute changes if they changed
         # this avoids bumping the time and trigger a rebuild for nothing
 
-        diff -r "${STAGING_DIR}/${dest}/config/" "${CHROOT_DIR}/${dest}/config/" >/dev/null 2>/dev/null
+        diff -r "${STAGING_DIR}/${dest}/new-config/" "${STAGING_DIR}/${dest}/old-config/" >/dev/null 2>/dev/null
         CHANGES=$?
 
         if [ "$CHANGES" -ne 0 ]
         then
             if [ $NOLOCALBUILD -eq 1 ]; then
-              build_config "${STAGING_DIR}/${dest}/config/" "dry-build" "" "${dest}"
+              build_config "${STAGING_DIR}/${dest}/new-config/" "dry-build" "" "${dest}"
             else
-              build_config "${STAGING_DIR}/${dest}/config/" "build" "" "${dest}"
+              build_config "${STAGING_DIR}/${dest}/new-config/" "build" "" "${dest}"
             fi
             echo " update required"
             # copy files in the chroot
-            install -d -o root -g sftp_users -m 755 "${CHROOT_DIR}"
-            install -d -o root -g sftp_users -m 755 "${CHROOT_DIR}/${dest}"
-            install -d -o root -g sftp_users -m 755 "${CHROOT_DIR}/${dest}/config"
-            install -d -o "${dest}" -g sftp_users -m 755 "${CHROOT_DIR}/${dest}/logs"
-            rsync --delete -rltgoDL --chown=${dest}:sftp_users "${STAGING_DIR}/${dest}/config/" "${CHROOT_DIR}/${dest}/config/"
-            touch "${CHROOT_DIR}/${dest}/last_change_date"
+            ssh $REMOTE_IP "install -d -o root -g sftp_users -m 755 \"${CHROOT_DIR}\""
+            ssh $REMOTE_IP "install -d -o root -g sftp_users -m 755 \"${CHROOT_DIR}/${dest}\""
+            ssh $REMOTE_IP "install -d -o root -g sftp_users -m 755 \"${CHROOT_DIR}/${dest}/config\""
+            ssh $REMOTE_IP "install -d -o \"${dest}\" -g sftp_users -m 755 \"${CHROOT_DIR}/${dest}/logs\""
+            rsync --delete -rltgoDL --chown=${dest}:sftp_users "${STAGING_DIR}/${dest}/new-config/" "${REMOTE_IP}:${CHROOT_DIR}/${dest}/config/"
+            ssh $REMOTE_IP "touch \"${CHROOT_DIR}/${dest}/last_change_date\""
         else
             echo " no changes"
         fi
@@ -728,11 +728,11 @@ then
     . ./config.sh
     cd hosts || exit 5
 
-    if [ "$(id -u)" -ne 0 ]
-    then
-      echo "you need to be root to run this script"
-      exit 1
-    fi
+    # if [ "$(id -u)" -ne 0 ]
+    # then
+    #   echo "you need to be root to run this script"
+    #   exit 1
+    # fi
 
     for i in $NAME
     do
@@ -753,7 +753,7 @@ then
         # the status will be correct
         if [ -f ../states.txt ]
         then
-            cp ../states.txt "${CHROOT_DIR}/states.txt"
+            scp ../states.txt "${REMOTE_IP}:${CHROOT_DIR}/states.txt"
         fi
 
     done
@@ -799,7 +799,7 @@ then
         while true
         do
             display_status
-            inotifywait -q -e 'modify,create' "${CHROOT_DIR}/states.txt" "${CHROOT_DIR}"/*/logs/ >/dev/null 2>/dev/null
+            ssh ${REMOTE_IP} "inotifywait -q -e 'modify,create' \"${CHROOT_DIR}/states.txt\" \"${CHROOT_DIR}\"/*/logs/ >/dev/null 2>/dev/null"
         done
     else
         display_status
