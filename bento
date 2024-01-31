@@ -316,7 +316,11 @@ if test -f flake.nix
 then
     nixos-rebuild build --flake .#${dest}
 else
-    nixos-rebuild build --no-flake --upgrade 2>&1 | tee "\$LOGFILE"
+    if [[ -z "${BENTO_CHANNEL}" ]]; then
+      nixos-rebuild build --no-flake --upgrade 2>&1 | tee "\$LOGFILE"
+    else
+      nixos-rebuild build --no-flake --upgrade -I nixpkgs=${BENTO_CHANNEL}/nixexprs.tar.xz 2>&1 | tee "\$LOGFILE"
+    fi
 fi
 
 SUCCESS=\$?

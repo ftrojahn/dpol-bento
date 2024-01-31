@@ -8,8 +8,10 @@ in {
   environment.sessionVariables = rec {
     NIX_PATH = [
       "nixos-config=/var/bento/configuration.nix"
-      "nixpkgs=https://channels.nixos.org/nixos-23.11/nixexprs.tar.xz"
     ];
+    BENTO_CHANNNEL = [
+      "https://channels.nixos.org/nixos-23.11"
+    ]
   };
 
   systemd.services.bento-upgrade = {
