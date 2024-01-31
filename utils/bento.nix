@@ -5,6 +5,13 @@
 }: let
   timer = "*:0/15";
 in {
+  environment.sessionVariables = rec {
+    NIX_PATH = [
+      "nixos-config=/var/bento/configuration.nix"
+      "nixpkgs=https://channels.nixos.org/nixos-23.11/nixexprs.tar.xz"
+    ];
+  };
+
   systemd.services.bento-upgrade = {
     enable = true;
     startAt = lib.mkDefault "${timer}";
