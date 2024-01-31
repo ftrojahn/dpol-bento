@@ -333,6 +333,7 @@ then
         then
             nixos-rebuild switch --flake .#${dest} 2>&1 | tee "\$LOGFILE"
         else
+            export NIX_PATH=/root/.nix-defexpr/channels:nixpkgs=/nix/var/nix/profiles/per-user/root/channels/nixos:nixos-config=/var/bento/configuration.nix:/nix/var/nix/profiles/per-user/root/channels
             if [[ -z "\${BENTO_CHANNEL}" ]]; then
               nixos-rebuild build --no-flake --upgrade 2>&1 | tee "\$LOGFILE"
             else
