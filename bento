@@ -333,7 +333,11 @@ then
         then
             nixos-rebuild switch --flake .#${dest} 2>&1 | tee "\$LOGFILE"
         else
-            nixos-rebuild switch --no-flake --upgrade 2>&1 | tee -a "\$LOGFILE"
+            if [[ -z "\${BENTO_CHANNEL}" ]]; then
+              nixos-rebuild build --no-flake --upgrade 2>&1 | tee "\$LOGFILE"
+            else
+              nixos-rebuild build --no-flake --upgrade -I nixpkgs=\${BENTO_CHANNEL}/nixexprs.tar.xz 2>&1 | tee "\$LOGFILE"
+            fi
         fi
         SUCCESS=\$(( SUCCESS + \$? ))
 
