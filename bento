@@ -306,6 +306,10 @@ else
     autoupdate=1
 fi
 
+if [ -f ./channel ]; then
+  channel=`cat channel`
+fi
+
 # check the current build if it exists
 OSVERSION="\$(basename "\$(readlink -f /nix/var/nix/profiles/system)")"
 
@@ -317,10 +321,10 @@ then
     nixos-rebuild build --flake .#${dest}
 else
     export NIX_PATH=/root/.nix-defexpr/channels:nixpkgs=/nix/var/nix/profiles/per-user/root/channels/nixos:nixos-config=/var/bento/configuration.nix:/nix/var/nix/profiles/per-user/root/channels
-    if [[ -z "\${BENTO_CHANNEL}" ]]; then
-      nixos-rebuild build --no-flake --upgrade 2>&1 | tee "\$LOGFILE"
+    if [ -f ./channel ]; then
+      nixos-rebuild build --no-flake --upgrade -I nixpkgs=\${channel}/nixexprs.tar.xz 2>&1 | tee "\$LOGFILE"
     else
-      nixos-rebuild build --no-flake --upgrade -I nixpkgs=\${BENTO_CHANNEL}/nixexprs.tar.xz 2>&1 | tee "\$LOGFILE"
+      nixos-rebuild build --no-flake --upgrade 2>&1 | tee "\$LOGFILE"
     fi
 fi
 
@@ -334,10 +338,10 @@ then
             nixos-rebuild switch --flake .#${dest} 2>&1 | tee "\$LOGFILE"
         else
             export NIX_PATH=/root/.nix-defexpr/channels:nixpkgs=/nix/var/nix/profiles/per-user/root/channels/nixos:nixos-config=/var/bento/configuration.nix:/nix/var/nix/profiles/per-user/root/channels
-            if [[ -z "\${BENTO_CHANNEL}" ]]; then
-              nixos-rebuild build --no-flake --upgrade 2>&1 | tee "\$LOGFILE"
+            if [ -f ./channel ]; then
+              nixos-rebuild switch --no-flake --upgrade -I nixpkgs=\${channel}/nixexprs.tar.xz 2>&1 | tee "\$LOGFILE"
             else
-              nixos-rebuild build --no-flake --upgrade -I nixpkgs=\${BENTO_CHANNEL}/nixexprs.tar.xz 2>&1 | tee "\$LOGFILE"
+              nixos-rebuild switch --no-flake --upgrade 2>&1 | tee "\$LOGFILE"
             fi
         fi
         SUCCESS=\$(( SUCCESS + \$? ))
