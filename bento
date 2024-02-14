@@ -307,7 +307,7 @@ else
 fi
 
 if [ -f ./channel ]; then
-  channel=`cat channel`
+  channel=\`cat channel\`
 fi
 
 # check the current build if it exists
