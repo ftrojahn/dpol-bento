@@ -201,7 +201,7 @@ user_exists() {
 # to try to align information
 display_table() {
     size_hostname=$1
-    machine=$2
+    machine=${2##*/}
     local_version=$3
     remote_version=$4
     state=$5
