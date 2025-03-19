@@ -300,7 +300,7 @@ then
     printf "%s\n" "cd config" "get -R ." | sftp -oConnectTimeout="${TIMEOUT}" -P "${REMOTE_PORT}" -r ${dest}@${REMOTE_IP}:
 
     # required by flakes
-    test -d .git || git init
+    test -d .git || git init -b main
     git add .
 else
     autoupdate=1
@@ -466,7 +466,7 @@ build_config()
         create_bento_files "./" "${NAME}"
 
         # add files to a git repo
-        test -d .git || git init >/dev/null 2>/dev/null
+        test -d .git || git init -b main >/dev/null 2>/dev/null
         git add . >/dev/null
 
         $SUDO env NIX_SSHOPTS=$NIX_SSHOPTS nixos-rebuild ${PARAMS} "${COMMAND}" --flake ".#${NAME}" | tee "${output}" 2>"${TMPLOG}" >"${TMPLOG}"
@@ -645,7 +645,7 @@ FLAKES=$(
 for flakes in $(find . -name flake.nix)
 do
     TARGET="$(dirname "${flakes}")"
-    nix flake show --json --option allow-import-from-derivation true "./$TARGET" | jq -r '.nixosConfigurations | keys[]'
+    nix flake show --json --legacy --all-systems --option allow-import-from-derivation true "./$TARGET" | jq -r '.nixosConfigurations | keys[]'
 done
 )
 
@@ -665,7 +665,7 @@ else
         for flakes in $(find . -name flake.nix)
         do
             TARGET="$(dirname $flakes)"
-            FLAKES_IN_DIR=$(nix flake show --json --option allow-import-from-derivation true "./$TARGET" | jq -r '.nixosConfigurations | keys[]')
+            FLAKES_IN_DIR=$(nix flake show --json --legacy --all-systems --option allow-import-from-derivation true "./$TARGET" | jq -r '.nixosConfigurations | keys[]')
             if echo "${FLAKES_IN_DIR}" | grep "^${NAME}$" >/dev/null
             then
                 # we need to keep the flake directory path
@@ -721,7 +721,7 @@ then
         test -d "$i" || continue
         if [ -f "$i/flake.nix" ]
         then
-            for host in $(nix flake show --json --option allow-import-from-derivation true "./${i}" | jq -r '.nixosConfigurations | keys[]')
+            for host in $(nix flake show --json --legacy --all-systems --option allow-import-from-derivation true "./${i}" | jq -r '.nixosConfigurations | keys[]')
             do
                 test -n "${SINGLE_FLAKE}" && ! [ "$host" = "${SINGLE_FLAKE}" ] && continue
                 printf "%${PRETTY_OUT_COLUMN}s " "${host}"
@@ -765,7 +765,7 @@ then
     do
         if [ -f "$i/flake.nix" ]
         then
-            for host in $(nix flake show --json --option allow-import-from-derivation true "./${i}" | jq -r '.nixosConfigurations | keys[]')
+            for host in $(nix flake show --json --legacy --all-systems --option allow-import-from-derivation true "./${i}" | jq -r '.nixosConfigurations | keys[]')
             do
                 test -n "${SINGLE_FLAKE}" && ! [ "$host" = "${SINGLE_FLAKE}" ] && continue
                 deploy_files "$i" "${host}" "${host}"
@@ -801,10 +801,12 @@ then
             echo "$directory"
             if [ -z "$2" ]
             then
-                nix flake update ./"$directory"
+                cd "$directory" >/dev/null || exit 5
+                nix flake update
+                cd - >/dev/null || exit 5
             else
                 cd "$directory" >/dev/null || exit 5
-                nix flake lock --update-input "$2"
+                nix flake update "$2"
                 cd - >/dev/null || exit 5
             fi
         fi
