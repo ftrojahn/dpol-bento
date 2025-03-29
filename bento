@@ -192,7 +192,9 @@ user_exists() {
     user="$1"
     if ! ssh ${REMOTE_IP} "id \"${user}\"" >/dev/null 2>/dev/null
     then
-        echo "you need a system user in your fleet for ${user}"
+        echo "You need a system user in your fleet for ${user}."
+        echo "Or: your fleet.nix has not been deployed to your bento host."
+        echo "Or: assign corresponding user (root) in your .ssh/config for the bento host."
         exit 3
     fi
 }
