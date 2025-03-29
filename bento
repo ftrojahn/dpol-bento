@@ -111,7 +111,10 @@ display_status() {
         # skip if no logs (for new hosts)
         if     [ -z "${LASTLOG}" ]
         then
+            MACHINE=${i##*/}
             display_table "$PRETTY_OUT_COLUMN" "$i" "${EXPECTED_CONFIG}" "" "new machine    "  "($ELAPSED_SINCE_LATE)    "
+            printf "On the new machine use:\n"
+            printf "sftp $MACHINE@$REMOTE_IP:/config/bootstrap.sh . && sh bootstrap.sh\n"
             continue
         fi
 
